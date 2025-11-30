@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Receitas & Recomendações</title>
+  <style>
+    :root{--accent:#ff6b35;--muted:#666;--bg:#f7f7f8;--card:#fff}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:#222}
+    header{background:linear-gradient(90deg,#ff9a66,#ff6b35);color:white;padding:28px 20px}
+    .container{max-width:1100px;margin:20px auto;padding:0 18px}
+    h1{margin:0;font-size:24px}
+    p.lead{margin:8px 0 0;color:rgba(255,255,255,0.95)}
+
+    .grid{display:grid;gap:20px;grid-template-columns:360px 1fr}
+    @media(max-width:880px){.grid{grid-template-columns:1fr}}
+
+    .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:0 6px 18px rgba(20,20,30,0.06)}
+    .sidebar .section{margin-bottom:14px}
+    label.ingredient{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer}
+    input[type=checkbox]{width:18px;height:18px}
+
+    .controls{display:flex;gap:10px;align-items:center;margin-top:8px}
+    button{background:var(--accent);color:white;border:none;padding:10px 14px;border-radius:8px;cursor:pointer}
+    button.secondary{background:#eee;color:#222}
+
+    .results h2{margin-top:0}
+    .recipe{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:12px;border-radius:10px;border:1px solid #eee;margin-bottom:10px}
+    .recipe .meta{font-size:13px;color:var(--muted)}
+    .badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#f0f0f0;font-size:12px}
+    .match{color:green;font-weight:600}
+    .missing{color:#c0392b}
+
+    .recipe-list-empty{color:var(--muted);padding:20px;text-align:center}
+
+    .top-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0}
+    select, input[type=search]{padding:8px;border-radius:8px;border:1px solid #ddd}
+
+    footer{padding:20px;text-align:center;color:var(--muted);font-size:13px}
+
+    /* small helper visuals */
+    .complexity{font-weight:700;padding:6px 10px;border-radius:8px;color:white}
+    .simple{background:#2ecc71}
+    .medium{background:#f1c40f;color:#2b2b2b}
+    .advanced{background:#e74c3c}
+
+    .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid #eee;background:#fafafa;font-size:13px}
+
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>Receitas & Recomendações</h1>
+      <p class="lead">Escolha os ingredientes que você tem e o nosso sistema vai sugerir receitas do mais simples ao mais avançado.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="grid">
+      <aside class="sidebar">
+        <div class="card">
+          <h3>Ingredientes disponíveis</h3>
+          <div class="section" id="ingredientsList">
+            <!-- checkboxes serão inseridas via JS -->
+          </div>
+
+          <div class="section">
+            <div class="top-controls">
+              <label class="pill">Complexidade
+                <select id="complexityFilter">
+                  <option value="any">Qualquer</option>
+                  <option value="simple">Simples</option>
+                  <option value="medium">Intermediário</option>
+                  <option value="advanced">Avançado</option>
+                </select>
+              </label>
+
+              <label class="pill">Ordenar por
+                <select id="sortBy">
+                  <option value="score">Melhor combinação</option>
+                  <option value="fewestMissing">Menos ingredientes faltando</option>
+                  <option value="complexity">Complexidade</option>
+                </select>
+              </label>
+
+            </div>
+
+            <div class="controls">
+              <button id="suggestBtn">Sugerir receitas</button>
+              <button class="secondary" id="clearBtn">Limpar</button>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;font-size:13px;color:var(--muted)">
+            Dica: marque os ingredientes que você já tem. O sistema dará preferência a receitas com maior porcentagem de ingredientes disponíveis.
+          </div>
+        </div>
+
+        <div style="height:12px"></div>
+
+        <div class="card">
+          <h4>Como funciona</h4>
+          <ol style="padding-left:18px;margin:6px 0;color:var(--muted)">
+            <li>Selecione os ingredientes que você tem.</li>
+            <li>Escolha nível de complexidade (opcional).</li>
+            <li>Clique em <strong>Sugerir receitas</strong> — o site irá ranquear receitas pela combinação e pelos ingredientes faltantes.</li>
+          </ol>
+        </div>
+      </aside>
+
+      <section class="results">
+        <div class="card">
+          <h2>Recomendações</h2>
+          <div style="margin-bottom:10px">
+            <input type="search" id="searchRecipes" placeholder="Pesquisar por nome de receita..." style="width:100%">
+          </div>
+
+          <div id="recipesContainer">
+            <div class="recipe-list-empty">Clique em <strong>Sugerir receitas</strong> para ver recomendações.</div>
+          </div>
+        </div>
+
+        <div style="height:18px"></div>
+
+        <div class="card" id="allRecipesCard">
+          <h3>Receitas do banco (Exemplos)</h3>
+          <div id="allRecipesList"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    Criado por Paulo Hugo
+  </footer>
+
+  <script>
+    // Banco de receitas (pode ser extendido)
+    const RECIPES = [
+      {id:1, name:'Ovo Mexido Simples', complexity:'simple', ingredients:['ovos','manteiga','sal','pimenta'], steps:['Bater ovos','Derreter manteiga','Cozinhar em fogo baixo']},
+      {id:2, name:'Salada de Atum', complexity:'simple', ingredients:['alface','tomate','atum','azeite','sal'], steps:['Picar ingredientes','Misturar e temperar']},
+      {id:3, name:'Macarrão Alho e Óleo', complexity:'simple', ingredients:['macarrao','alho','azeite','sal','pimenta'], steps:['Cozinhar macarrão','Refogar alho','Misturar']},
+      {id:4, name:'Frango Grelhado com Ervas', complexity:'medium', ingredients:['peito de frango','azeite','alecrim','sal','pimenta','limão'], steps:['Temperar frango','Grelhar']},
+      {id:5, name:'Risoto de Cogumelos', complexity:'advanced', ingredients:['arroz arboreo','cogumelos','caldo de legumes','cebola','manteiga','vinho branco','parmesao'], steps:['Refogar cebola','Adicionar arroz e vinho','Cozinhar com caldo e mexer bastante']},
+      {id:6, name:'Bolo de Chocolate Simples', complexity:'medium', ingredients:['farinha','açúcar','cacau','ovos','manteiga','fermento'], steps:['Misturar ingredientes secos','Adicionar líquidos','Assar']},
+      {id:7, name:'Paella Rápida', complexity:'advanced', ingredients:['arroz','frutos do mar','pimentão','caldo de peixe','azeite','alho','paella seasoning'], steps:['Refogar ingredientes','Cozinhar arroz com caldo']},
+      {id:8, name:'Sanduíche Caprese', complexity:'simple', ingredients:['pão','tomate','mussarela','manjericão','azeite'], steps:['Montar ingredientes no pão']},
+      {id:9, name:'Strogonoff de Carne', complexity:'medium', ingredients:['carne','creme de leite','cebola','molho de tomate','manteiga','arroz'], steps:['Refogar carne','Adicionar molho','Finalizar com creme']},
+    ];
+
+    // Construir lista global de ingredientes
+    const ALL_INGREDIENTS = (()=>{
+      const s = new Set();
+      RECIPES.forEach(r=>r.ingredients.forEach(i=>s.add(i)));
+      return Array.from(s).sort();
+    })();
+
+    // --- UI build ---
+    const ingredientsListEl = document.getElementById('ingredientsList');
+    const recipesContainer = document.getElementById('recipesContainer');
+    const allRecipesList = document.getElementById('allRecipesList');
+
+    function buildIngredientCheckboxes(){
+      ingredientsListEl.innerHTML = '';
+      ALL_INGREDIENTS.forEach(ing=>{
+        const id = 'ing_'+ing.replace(/\s+/g,'_');
+        const label = document.createElement('label'); label.className='ingredient';
+        label.innerHTML = `<input type="checkbox" value="${ing}" id="${id}"> <span style=\"text-transform:capitalize\">${ing}</span>`;
+        ingredientsListEl.appendChild(label);
+      });
+    }
+
+    function listAllRecipes(){
+      allRecipesList.innerHTML = '';
+      RECIPES.forEach(r=>{
+        const div = document.createElement('div'); div.className='recipe';
+        div.innerHTML = `<div>
+            <strong>${r.name}</strong>
+            <div class="meta">Ingredientes: ${r.ingredients.join(', ')}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="complexity ${r.complexity==='simple'?'simple':r.complexity==='medium'?'medium':'advanced'}">${r.complexity}</div>
+          </div>`;
+        allRecipesList.appendChild(div);
+      });
+    }
+
+    buildIngredientCheckboxes(); listAllRecipes();
+
+    // --- Recomendador ---
+    function getSelectedIngredients(){
+      return Array.from(document.querySelectorAll('#ingredientsList input:checked')).map(i=>i.value);
+    }
+
+    function scoreRecipe(recipe, selected){
+      // Count matches and missing
+      const matches = recipe.ingredients.filter(i=>selected.includes(i));
+      const missing = recipe.ingredients.filter(i=>!selected.includes(i));
+      const score = matches.length / recipe.ingredients.length; // 0..1
+      return {matches, missing, score};
+    }
+
+    function suggestRecipes(){
+      const selected = getSelectedIngredients();
+      const complexity = document.getElementById('complexityFilter').value;
+      const sortBy = document.getElementById('sortBy').value;
+
+      let candidates = RECIPES.map(r=>{
+        const s = scoreRecipe(r, selected);
+        return {...r, matches:s.matches, missing:s.missing, score:s.score, missingCount:s.missing.length}
+      });
+
+      if(complexity!=='any') candidates = candidates.filter(c=>c.complexity===complexity);
+
+      // sort
+      candidates.sort((a,b)=>{
+        if(sortBy==='score') return b.score - a.score || a.missingCount - b.missingCount;
+        if(sortBy==='fewestMissing') return a.missingCount - b.missingCount || b.score - a.score;
+        if(sortBy==='complexity') return (a.complexity>b.complexity)?1:-1;
+        return 0;
+      });
+
+      return {selected,candidates};
+    }
+
+    function renderRecommendations(listObj){
+      const {selected,candidates} = listObj;
+      const searchTerm = document.getElementById('searchRecipes').value.trim().toLowerCase();
+
+      const filtered = candidates.filter(r=>r.name.toLowerCase().includes(searchTerm));
+
+      recipesContainer.innerHTML = '';
+      if(filtered.length===0){
+        recipesContainer.innerHTML = '<div class="recipe-list-empty">Nenhuma receita encontrada.</div>';
+        return;
+      }
+
+      filtered.forEach(r=>{
+        const div = document.createElement('div'); div.className='recipe';
+        const matchedDisplay = r.matches.length>0 ? `<span class="badge match">${r.matches.length} ingredientes ✓</span>` : `<span class="badge">0 ✓</span>`;
+        const missingDisplay = r.missing.length>0 ? `<div style="margin-top:6px"><small class=\"meta\">Faltam: <span class=\"missing\">${r.missing.join(', ')}</span></small></div>` : '';
+
+        div.innerHTML = `<div>
+            <strong>${r.name}</strong>
+            <div class="meta">Ingredientes: ${r.ingredients.join(', ')}</div>
+            ${missingDisplay}
+          </div>
+          <div style="text-align:right">
+            ${matchedDisplay}
+            <div style="height:8px"></div>
+            <div class="complexity ${r.complexity==='simple'?'simple':r.complexity==='medium'?'medium':'advanced'}">${r.complexity}</div>
+            <div style="font-size:12px;margin-top:8px">Score: ${(r.score*100).toFixed(0)}%</div>
+          </div>`;
+
+        // botão para ver passos
+        const viewBtn = document.createElement('button'); viewBtn.textContent='Ver modo de preparo';
+        viewBtn.style.marginLeft='8px'; viewBtn.onclick = ()=>{
+          alert('Modo de preparo para '+r.name+'\n\n' + r.steps.map((s,idx)=>`${idx+1}. ${s}`).join('\n'));
+        };
+        div.querySelector('div').appendChild(viewBtn);
+
+        recipesContainer.appendChild(div);
+      });
+    }
+
+    // Events
+    document.getElementById('suggestBtn').addEventListener('click', ()=>{
+      const result = suggestRecipes();
+      renderRecommendations(result);
+    });
+    document.getElementById('clearBtn').addEventListener('click', ()=>{
+      document.querySelectorAll('#ingredientsList input').forEach(i=>i.checked=false);
+      recipesContainer.innerHTML = '<div class="recipe-list-empty">Clique em <strong>Sugerir receitas</strong> para ver recomendações.</div>';
+    });
+
+    document.getElementById('searchRecipes').addEventListener('input', ()=>{
+      // re-render based on last suggestion; we'll just call suggestRecipes again to keep it simple
+      const result = suggestRecipes(); renderRecommendations(result);
+    });
+
+    // Small UX: enter to search
+    document.getElementById('searchRecipes').addEventListener('keypress', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); const res = suggestRecipes(); renderRecommendations(res);} });
+
+    // Allow clicking ingredient labels to auto-suggest (optional)
+    document.getElementById('ingredientsList').addEventListener('change', ()=>{
+      // dynamic auto-suggest: if many ingredients selected, suggest automatically
+      const selected = getSelectedIngredients();
+      if(selected.length>=3){ const result = suggestRecipes(); renderRecommendations(result);} 
+    });
+
+    // Accessibility: keyboard focus for buttons
+    document.querySelectorAll('button').forEach(b=>b.addEventListener('keyup', (e)=>{ if(e.key==='Enter') b.click(); }));
+
+  </script>
+</body>
+</html>
